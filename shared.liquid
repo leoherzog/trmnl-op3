@@ -123,116 +123,87 @@ Parameters:
         downloadsAll.push({{ episode.downloadsAll | default: 0 }});
       {% endfor %}
 
-      Highcharts.chart("{{ chartId }}", {
-        chart: {
-          type: "{% if layout_size == 'half-vertical' %}bar{% else %}column{% endif %}",
-          height: null,
-          width: null,
-          animation: false,
-          {% comment %} half-horizontal fills its grid cell exactly (no slack), so reserve extra bottom margin for the y:25 x-axis labels Highcharts doesn't account for — keeps it responsive at any screen height while clearing the title bar {% endcomment %}
-          spacing: [10, 10, {% if layout_size == 'half-horizontal' %}30{% else %}5{% endif %}, 10],
-          backgroundColor: "transparent"
-        },
-        title: {
-          text: null
-        },
-        plotOptions: {
-          series: {
-            grouping: false,
-            animation: false,
-            enableMouseTracking: false,
-            states: {
-              hover: { enabled: false }
+      {% comment %} plugins.js bundles TRMNLCharts and can finish loading after this script, so wait for it and Highcharts before building {% endcomment %}
+      function whenReady(cb) {
+        var tries = 0;
+        (function attempt() {
+          if (window.TRMNLCharts && window.Highcharts) return cb();
+          if (++tries > 200) return;
+          setTimeout(attempt, 50);
+        })();
+      }
+
+      whenReady(function() {
+        var el = "{{ chartId }}";
+        {% comment %} watch() rebuilds on device/mode/theme changes so each screen gets its native paint: solid grays on 2-bit/4-bit (TRMNL X), self-contained dither tiles on 1-bit {% endcomment %}
+        TRMNLCharts.watch(el, function() {
+          {% comment %} options() supplies the TRMNL defaults (no animation/chrome, transparent background, framework text, and the muted grid line, which the framework repaints solid/dithered after render so dash styles don't apply); only layout-specific settings are layered on top {% endcomment %}
+          return Highcharts.chart(el, TRMNLCharts.merge(TRMNLCharts.options({ el: el }), {
+            chart: {
+              type: "{% if layout_size == 'half-vertical' %}bar{% else %}column{% endif %}",
+              height: null,
+              width: null,
+              {% comment %} half-horizontal fills its grid cell exactly (no slack), so reserve extra bottom margin for the y:25 x-axis labels Highcharts doesn't account for — keeps it responsive at any screen height while clearing the title bar {% endcomment %}
+              spacing: [10, 10, {% if layout_size == 'half-horizontal' %}30{% else %}5{% endif %}, 10]
             },
-            borderWidth: 0
-          }
-        },
-        series: [{
-          name: "All Time",
-          data: downloadsAll,
-          pointPadding: 0.1,
-          zIndex: 1,
-          color: "#000000"
-        }, {
-          name: "7 Days",
-          data: downloads7d,
-          pointPadding: 0.15,
-          zIndex: 2,
-          color: {
-            pattern: {
-              image: "https://trmnl.com/images/grayscale/gray-3.png",
-              width: 12,
-              height: 12
-            }
-          }
-        }, {
-          name: "3 Days",
-          data: downloads3d,
-          pointPadding: 0.2,
-          zIndex: 3,
-          color: {
-            pattern: {
-              image: "https://trmnl.com/images/grayscale/gray-5.png",
-              width: 12,
-              height: 12
-            }
-          }
-        }, {
-          name: "1 Day",
-          data: downloads1d,
-          pointPadding: 0.25,
-          zIndex: 4,
-          color: {
-            pattern: {
-              image: "https://trmnl.com/images/grayscale/gray-7.png",
-              width: 12,
-              height: 12
-            }
-          }
-        }],
-        tooltip: { enabled: false },
-        legend: { enabled: false },
-        yAxis: {
-          labels: {
-            style: {
-              fontSize: "{% if layout_size == 'quadrant' %}12px{% elsif layout_size == 'half-vertical' %}14px{% else %}16px{% endif %}",
-              color: "#000000"
-            }
-          },
-          gridLineDashStyle: "shortdot",
-          gridLineWidth: 1,
-          gridLineColor: "#000000",
-          tickAmount: {% if layout_size == 'quadrant' or layout_size == 'half-vertical' %}3{% else %}5{% endif %},
-          title: {
-            text: null
-          }
-        },
-        xAxis: {
-          categories: episodeLabels,
-          labels: {
-            style: {
-              fontSize: "{% if layout_size == 'quadrant' %}10px{% elsif layout_size == 'half-vertical' %}12px{% else %}14px{% endif %}",
-              color: "#000000"
+            plotOptions: {
+              series: {
+                grouping: false,
+                borderWidth: 0
+              }
             },
-            {% unless layout_size == 'half-vertical' %}
-            padding: 5,
-            y: 25,
-            {% endunless %}
-            rotation: 0
-          },
-          lineWidth: 0,
-          gridLineDashStyle: "dot",
-          tickWidth: 0,
-          tickLength: 0,
-          gridLineWidth: 1,
-          gridLineColor: "#000000",
-          title: {
-            text: null
-          }
-        },
-        credits: {
-          enabled: false
-        }
+            {% comment %} Explicit palette tokens rather than series(i, 4): keeps 7 Days the same gray-30 as the Wkly Avg swatch above and spreads the nested layers evenly from black to gray-70 {% endcomment %}
+            series: [{
+              name: "All Time",
+              data: downloadsAll,
+              pointPadding: 0.1,
+              zIndex: 1,
+              color: TRMNLCharts.paint("black", { el: el })
+            }, {
+              name: "7 Days",
+              data: downloads7d,
+              pointPadding: 0.15,
+              zIndex: 2,
+              color: TRMNLCharts.paint("gray-30", { el: el })
+            }, {
+              name: "3 Days",
+              data: downloads3d,
+              pointPadding: 0.2,
+              zIndex: 3,
+              color: TRMNLCharts.paint("gray-50", { el: el })
+            }, {
+              name: "1 Day",
+              data: downloads1d,
+              pointPadding: 0.25,
+              zIndex: 4,
+              color: TRMNLCharts.paint("gray-70", { el: el })
+            }],
+            yAxis: {
+              labels: {
+                style: {
+                  fontSize: "{% if layout_size == 'quadrant' %}12px{% elsif layout_size == 'half-vertical' %}14px{% else %}16px{% endif %}"
+                }
+              },
+              tickAmount: {% if layout_size == 'quadrant' or layout_size == 'half-vertical' %}3{% else %}5{% endif %}
+            },
+            xAxis: {
+              categories: episodeLabels,
+              labels: {
+                style: {
+                  fontSize: "{% if layout_size == 'quadrant' %}10px{% elsif layout_size == 'half-vertical' %}12px{% else %}14px{% endif %}"
+                },
+                {% unless layout_size == 'half-vertical' %}
+                padding: 5,
+                y: 25,
+                {% endunless %}
+                rotation: 0
+              },
+              lineWidth: 0,
+              tickWidth: 0,
+              tickLength: 0
+            }
+          }));
+        });
       });
     })();
     </script>
